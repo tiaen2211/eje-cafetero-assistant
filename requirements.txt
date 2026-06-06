@@ -1,0 +1,28 @@
+# ── Interfaz ──────────────────────────────────────────
+streamlit>=1.40.0
+
+# ── LLM y agentes ─────────────────────────────────────
+groq>=0.11.0
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-groq>=0.2.0
+
+# ── RAG: embeddings y base vectorial ──────────────────
+sentence-transformers>=3.1.0
+chromadb>=0.5.0
+
+# ── Procesamiento de documentos ───────────────────────
+pypdf>=4.2.0
+beautifulsoup4>=4.12.0
+requests>=2.32.0
+
+# ── Skill: generación de PDF ──────────────────────────
+reportlab>=4.2.0
+
+# ── MCP ───────────────────────────────────────────────
+mcp>=1.0.0
+
+# ── Utilidades ────────────────────────────────────────
+python-dotenv>=1.0.0
+rank-bm25>=0.2.2
