@@ -29,6 +29,9 @@ env/
 Thumbs.db
 desktop.ini
 
+# Claude (herramienta de desarrollo - no es parte del proyecto)
+.claude/
+
 # Logs
 *.log
 
