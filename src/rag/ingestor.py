@@ -85,7 +85,7 @@ def indexar_documentos():
         ids=ids,
         metadatas=metadatas,
     )
-    print("✅ Indexación completada. ChromaDB listo en:", CHROMA_PATH)
+    print("[OK] Indexacion completada. ChromaDB listo en:", CHROMA_PATH)
 
 
 if __name__ == "__main__":

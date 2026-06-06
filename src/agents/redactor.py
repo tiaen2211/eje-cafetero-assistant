@@ -10,7 +10,7 @@ from groq import Groq
 
 load_dotenv()
 
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.2-90b-text-preview")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 
 class AgentesRedactor:

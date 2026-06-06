@@ -3,10 +3,15 @@ app.py — Interfaz principal del asistente turístico Eje Cafetero
 Ejecutar con: streamlit run src/app.py
 """
 
+import os
+import requests
 import streamlit as st
-from agents.buscador import AgentesBuscador
-from agents.redactor import AgentesRedactor
+from dotenv import load_dotenv
+
+from agents.grafo import consultar
 from skills.itinerario_pdf import generar_itinerario_pdf
+
+load_dotenv()
 
 # ── Configuración de la página ─────────────────────────────────────────────
 st.set_page_config(
@@ -22,42 +27,100 @@ st.caption("Pregúntame sobre destinos, rutas, gastronomía, clima y cultura de 
 if "mensajes" not in st.session_state:
     st.session_state.mensajes = []
 
-# Mostrar mensajes previos
 for msg in st.session_state.mensajes:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
+
+# ── Integración MCP: clima en tiempo real ─────────────────────────────────
+CIUDADES_EJE = {
+    "pereira": "Pereira,CO",
+    "manizales": "Manizales,CO",
+    "armenia": "Armenia,CO",
+    "salento": "Salento,CO",
+    "filandia": "Filandia,CO",
+    "quimbaya": "Quimbaya,CO",
+    "cartago": "Cartago,CO",
+    "montenegro": "Montenegro,CO",
+    "circasia": "Circasia,CO",
+}
+
+def _consultar_clima_mcp(ciudad: str) -> str:
+    """
+    Llama a la herramienta 'obtener_clima' del servidor MCP de clima.
+    Para la demo se invoca la lógica del servidor directamente;
+    en producción se conectaría via mcp.ClientSession al proceso stdio.
+    """
+    api_key = os.getenv("OPENWEATHER_API_KEY", "")
+    if not api_key:
+        return ""
+    ciudad_query = CIUDADES_EJE.get(ciudad.lower(), f"{ciudad},CO")
+    try:
+        resp = requests.get(
+            "https://api.openweathermap.org/data/2.5/weather",
+            params={"q": ciudad_query, "appid": api_key, "units": "metric", "lang": "es"},
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            return ""
+        d = resp.json()
+        return (
+            f"\n\n🌤️ **Clima actual en {d['name']}:** "
+            f"{d['weather'][0]['description'].capitalize()}, "
+            f"{d['main']['temp']:.1f}°C — "
+            f"Humedad {d['main']['humidity']}%."
+        )
+    except Exception:
+        return ""
+
+
+def _detectar_ciudad(texto: str) -> str | None:
+    """Detecta si el usuario menciona una ciudad del Eje Cafetero."""
+    texto_lower = texto.lower()
+    for ciudad in CIUDADES_EJE:
+        if ciudad in texto_lower:
+            return ciudad
+    return None
+
+
 # ── Entrada del usuario ────────────────────────────────────────────────────
 if pregunta := st.chat_input("¿Qué quieres saber del Eje Cafetero?"):
 
-    # Mostrar pregunta del usuario
     with st.chat_message("user"):
         st.markdown(pregunta)
     st.session_state.mensajes.append({"role": "user", "content": pregunta})
 
-    # Generar respuesta con los agentes
     with st.chat_message("assistant"):
-        with st.spinner("Buscando información..."):
+        with st.spinner("Consultando documentos y generando respuesta..."):
 
-            # Agente 1: Buscador recupera documentos relevantes
-            buscador = AgentesBuscador()
-            fragmentos = buscador.buscar(pregunta)
+            # ── Pipeline multiagente via LangGraph ────────────────────────
+            respuesta, fragmentos = consultar(pregunta)
 
-            # Agente 2: Redactor genera la respuesta con los fragmentos
-            redactor = AgentesRedactor()
-            respuesta = redactor.redactar(pregunta, fragmentos)
+            # ── MCP: enriquecer con clima si mencionan una ciudad ─────────
+            ciudad = _detectar_ciudad(pregunta)
+            if ciudad:
+                info_clima = _consultar_clima_mcp(ciudad)
+                if info_clima:
+                    respuesta += info_clima
 
         st.markdown(respuesta)
 
-        # Botón para generar itinerario PDF (Skill)
-        if any(p in pregunta.lower() for p in ["itinerario", "plan", "viaje", "días"]):
-            if st.button("📄 Descargar itinerario en PDF"):
-                pdf_bytes = generar_itinerario_pdf(pregunta, respuesta)
-                st.download_button(
-                    label="⬇️ Guardar PDF",
-                    data=pdf_bytes,
-                    file_name="itinerario_eje_cafetero.pdf",
-                    mime="application/pdf",
-                )
+        # ── Skill: generar PDF de itinerario ──────────────────────────────
+        palabras_itinerario = ["itinerario", "plan", "viaje", "días", "visitar", "recorrido"]
+        if any(p in pregunta.lower() for p in palabras_itinerario):
+            pdf_bytes = generar_itinerario_pdf(pregunta, respuesta)
+            st.download_button(
+                label="📄 Descargar itinerario en PDF",
+                data=pdf_bytes,
+                file_name="itinerario_eje_cafetero.pdf",
+                mime="application/pdf",
+            )
+
+        # ── Mostrar fuentes usadas ────────────────────────────────────────
+        if fragmentos:
+            with st.expander("📚 Fuentes consultadas"):
+                fuentes = list({f["fuente"] for f in fragmentos})
+                for f in fuentes:
+                    st.markdown(f"- {f}")
 
     st.session_state.mensajes.append({"role": "assistant", "content": respuesta})
